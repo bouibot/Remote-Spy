@@ -19,11 +19,11 @@ end;
 
 local Color3NEW, Color3RGB = Color3.new, Color3.fromRGB;
 local tableInsert, tableClear, tableConcat, tableFind, tableRemove = table.insert, table.clear, table.concat, table.find, table.remove;
-local stringSub, stringRep = string.sub, string.rep;
+local stringSub, stringRep, stringLower, stringGsub, stringFind = string.sub, string.rep, string.lower, string.gsub, string.find;
 
 -- initialize utility
 
-local utility = {indentString = "    "};
+local utility = {indentString = "    ", alphabet = "abcdefghijklmnopqrstuvwxyz"};
 
 do
     function utility.Indent(offset: number) -- a bad impl
@@ -40,6 +40,10 @@ do
         return clicked; -- since held is always false
     end;
 
+    function utility.isValidName(name: string)
+        return stringGsub(stringGsub(stringLower(name), "%a", ""), "%d", "") == "" and stringFind(name, "%d") ~= 1;
+    end;
+
     function utility.getPath(target: Instance)
         local path = {target};
         local current = target;
@@ -49,9 +53,15 @@ do
         end;
         local pathString = `game:GetService("{path[#path-1].ClassName}").`;
         for i = -#path+2, -1 do
-            pathString ..= path[-i].Name .. ".";
+            local name = path[-i].Name;
+            if not utility.isValidName(name) then
+                print("THERE");
+                pathString = stringSub(pathString, 1, -2) .. `["{name}"].`;
+            else
+                pathString ..= name .. ".";
+            end;
         end;
-        return stringSub(pathString, 1, -2);
+        return stringSub(pathString, -1, -1) == "." and stringSub(pathString, 1, -2) or pathString;
     end;
 
     function utility.tableToString(target: table, indent: number)
