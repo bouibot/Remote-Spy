@@ -78,7 +78,6 @@ do
         for i = -#path+2, -1 do
             local name = path[-i].Name;
             if not utility.isValidName(name) then
-                print("THERE");
                 pathString = stringSub(pathString, 1, -2) .. `["{name}"].`;
             else
                 pathString ..= name .. ".";
@@ -308,7 +307,7 @@ ImGui.OnRender(function()
                     end;
                 end; ImGui.SameLine();
                 if ImGui.Button("Repeat##Call"..i) then
-                    task.defer(remoteTab.FireServer, remoteTab, unpack(call.args, 1, call.count));
+                    taskDefer(remoteTab.FireServer, remoteTab, unpack(call.args, 1, call.count));
                 end;
             end;
         end;
@@ -316,8 +315,8 @@ ImGui.OnRender(function()
         ui.showNil = ImGui.Checkbox("Show Nil Arguments", ui.showNil);
         ui.showStringArguments = ImGui.Checkbox("Show Stringified Arguments", ui.showStringArguments);
         if ImGui.Button("Save") then
-            utility.saveSettings();
-            rconsoleprint("[BRS] Settings saved");
+            taskDefer(utility.saveSettings);
+            taskDefer(rconsoleprint, "[BRS] Settings saved");
         end; ImGui.SameLine();
         if ImGui.Button("Reset") then
             ui.showNil = false;
