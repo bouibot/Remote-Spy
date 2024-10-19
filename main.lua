@@ -11,28 +11,51 @@ if not isfolder("brs") then
     makefolder("brs");
 end;
 
-if not isfile("settings.json") then
-    writefile("settings.json", "{}");
+if not isfile("brs/settings.json") then
+    writefile("brs/settings.json", "{}");
 end;
 
 -- some optimization vars
 
+local HttpService = game:GetService("HttpService");
+
 local Color3NEW, Color3RGB = Color3.new, Color3.fromRGB;
 local tableInsert, tableClear, tableConcat, tableFind, tableRemove = table.insert, table.clear, table.concat, table.find, table.remove;
 local stringSub, stringRep, stringLower, stringGsub, stringFind = string.sub, string.rep, string.lower, string.gsub, string.find;
+local taskDefer = task.defer;
+local vector2New = Vector2.new;
+
+-- initialize ui (settings)
+
+local ui = {showNil = false, showStringArguments = false};
+
+do
+    for i, v in next, HttpService:JSONDecode(readfile("brs/settings.json")) do
+        ui[i] = v;
+    end;
+end;
 
 -- initialize utility
 
 local utility = {indentString = "    ", alphabet = "abcdefghijklmnopqrstuvwxyz"};
 
 do
+    local ICON_REMOTE_EVENT = ImGui.LoadImage(game:HttpGet("https://i-dont-wanna.live/xlt45ibiaqb9a0g1uc.png"));
+    local ICON_REMOTE_FUNCTION = ImGui.LoadImage(game:HttpGet("https://i-dont-wanna.live/c22mzbc05mowxowp3h.png"));
+
+    utility.icons = {
+        RemoteEvent = ICON_REMOTE_EVENT;
+        UnreliableRemoteEvent = ICON_REMOTE_EVENT;
+        RemoteFunction = ICON_REMOTE_FUNCTION;
+    }
+
     function utility.Indent(offset: number) -- a bad impl
         ImGui.Text("");
         ImGui.SameLine(number);
     end;
 
     function utility.PushStyleColor(id: number, color: Color3) -- i hope grh fixes this shit
-        ImGui.PushStyleColor(id, Color3NEW(color.R * 255, color.G * 255, color.B * 255));
+        ImGui.PushStyleColor(id, color);
     end;
 
     function utility.Selectable(name: string, value: boolean) -- this is better
@@ -68,7 +91,7 @@ do
         indent = indent or 1;
         local str = "{\n";
         for i, v in next, target do
-            local valueString = valueToString(v, indent+1);
+            local valueString = utility.valueToString(v, indent+1);
             local indexString = utility.valueToString(i, indent+1);
             str = str .. stringRep(utility.indentString, indent) .. `[{indexString}] = {valueString};\n`
         end;
@@ -129,6 +152,10 @@ do
         end;
        
     end;
+
+    function utility.saveSettings()
+        writefile("brs/settings.json", HttpService:JSONEncode(ui));
+    end;
 end;
 
 -- initalize rspy (vars&funcs)
@@ -171,15 +198,13 @@ do
 
 end;
 
-local ui = {showNil = false};
-
 -- imgui variables
 
 local tab = 0;
 local remoteTab = 0;
 
 ImGui.OnRender(function()
-    --ImGui.SetNextWindowSize(Vector2.new(1000, 250));
+    ImGui.SetNextWindowSize(Vector2.new(400, 300), ImGuiCond_FirstUseEver);
     ImGui.Begin("Boui's Remote Spy");
 
     if remoteTab == 0 then
@@ -209,17 +234,18 @@ ImGui.OnRender(function()
                 tableClear(remoteSpy.cache);
                 remoteSpy.recalculate();
             end;
-            utility.PushStyleColor(24, Color3RGB(150, 150, 150)); -- fix in future when GRH adds transparency
+            --utility.PushStyleColor(24, ImGui.GetColorU32(255, 255, 255, 0.5)); -- this shit doesn't work :sob:
             utility.PushStyleColor(25, Color3RGB(165, 165, 165));
             utility.PushStyleColor(26, Color3RGB(180, 180, 180));
             for remote, calls in next, remoteSpy.cache do
-                utility.Indent(10);
+                utility.Indent(5);
+                ImGui.Image(utility.icons[calls.class], vector2New(16, 16)); ImGui.SameLine();
                 if utility.Selectable(tostring(remote), false) then
                     remoteTab = remote;
                 end; ImGui.SameLine();
                 ImGui.Text("  Calls:"); ImGui.SameLine();
-                ImGui.TextColored(Color3NEW(0, 1, 0), tostring(#calls));
-                --[[ImGui.Button("Ignore"); ImGui.SameLine();
+                ImGui.TextColored(Color3NEW(0, 1, 0), tostring(#calls)); --[[ImGui.SameLine();
+                ImGui.Button("Ignore"); ImGui.SameLine();
                 ImGui.Button("Block");]] -- port in future versions
             end;
             ImGui.PopStyleColor(3);
@@ -227,8 +253,9 @@ ImGui.OnRender(function()
             local ignored, blocked = tableFind(remoteSpy.ignore, remoteTab) ~= nil, tableFind(remoteSpy.block, remoteTab) ~= nil;
 
             local calls = remoteSpy.cache[remoteTab];
-            ImGui.TextColored(Color3NEW(1, 0, 0), "Remote: "); ImGui.SameLine();
-            ImGui.Text(tostring(remoteTab));
+            ImGui.TextColored(Color3NEW(1, 0, 0), "Instance: "); ImGui.SameLine();
+            ImGui.Text(tostring(remoteTab)); ImGui.SameLine();
+            ImGui.Image(utility.icons[calls.class or "RemoteEvent"], vector2New(16, 16));
             utility.PushStyleColor(21, Color3RGB(200, 0, 0));
             utility.PushStyleColor(22, Color3RGB(225, 0, 0));
             utility.PushStyleColor(23, Color3RGB(255, 0, 0));
@@ -256,33 +283,47 @@ ImGui.OnRender(function()
                 end;
             end; -- remove in future
 
+            local requestFrom = ui.showStringArguments and "stringified" or "args";
+
             for i = 1, #calls do
                 --i = -i;
                 ImGui.Text(`Call {tostring(i)}`);
                 local call = calls[i];
                 for n = 1, ui.showNil and call.count or #call.args do
-                    local argument = call.args[n];
+                    local argument = call[requestFrom][n];
                     ImGui.TextColored(Color3RGB(250, 150, 0), `{tostring(n)}.  `); ImGui.SameLine();
                     ImGui.Text(tostring(argument));
                 end;
                 if ImGui.Button("Generate Script##Call"..i) then
-                    setclipboard(utility.generateScript(remoteTab, call.args, call.count));
+                    task.defer(setclipboard, utility.generateScript(remoteTab, call.args, call.count));
                 end; ImGui.SameLine();
                 if ImGui.Button("Get Calling Script##Call"..i) then
                     local script = call.called;
                     if script == nil then
-                        setclipboard("NO SCRIPT FOUND!");
+                        taskDefer(setclipboard, "NO SCRIPT FOUND");
                     elseif script.Parent == nil then
-                        setclipboard(script.Name.."--PARENTED TO NIL");
+                        taskDefer(setclipboard, script.Name.."--PARENTED TO NIL");
                     else
-                        setclipboard(utility.getPath(script));
+                        taskDefer(setclipboard, utility.getPath(script));
                     end;
+                end; ImGui.SameLine();
+                if ImGui.Button("Repeat##Call"..i) then
+                    task.defer(remoteTab.FireServer, remoteTab, unpack(call.args, 1, call.count));
                 end;
             end;
         end;
     elseif tab == 1 then
         ui.showNil = ImGui.Checkbox("Show Nil Arguments", ui.showNil);
-        ImGui.Text("Credits:\n    -boui: developing this thing\n    -GRH for adding ImGui\n    -DracoFAAD for helping me");
+        ui.showStringArguments = ImGui.Checkbox("Show Stringified Arguments", ui.showStringArguments);
+        if ImGui.Button("Save") then
+            utility.saveSettings();
+            rconsoleprint("[BRS] Settings saved");
+        end; ImGui.SameLine();
+        if ImGui.Button("Reset") then
+            ui.showNil = false;
+            ui.showStringArguments = false;
+        end;
+        ImGui.Text("Credits:\n    -boui: developing this thing\n    -GRH for adding ImGui & help\n    -DracoFAAD for helping me");
     end;
 
     ImGui.End();
@@ -291,12 +332,12 @@ end);
 -- hooks
 
 local oldNamecall; oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-    local arguments = {...};
-    local count = select("#", ...);
-    local method = getnamecallmethod();
 
     if not checkcaller() then -- add toggle in future
-        if method == "FireServer" and self.ClassName == "RemoteEvent" then
+        local arguments = {...};
+        local count = select("#", ...);
+        local method = getnamecallmethod();
+        if method == "FireServer" and self.ClassName == "RemoteEvent" or self.ClassName == "UnreliableRemoteEvent" then
             if tableFind(remoteSpy.block, self) then
                 return;
             end;
@@ -305,13 +346,43 @@ local oldNamecall; oldNamecall = hookmetamethod(game, "__namecall", newcclosure(
             end;
             local cache = remoteSpy.cache[self];
             if not cache then
-                cache = {};
+                cache = {class = self.ClassName};
                 remoteSpy.cache[self] = cache;
+            end;
+            local stringified = {};
+            for i = 1, #arguments do
+                local argument = arguments[i];
+                stringified[i] = utility.valueToString(argument);
             end;
             tableInsert(cache, {
                 args = arguments;
                 count = count;
                 called = getcallingscript();
+                stringified = stringified;
+            });
+            remoteSpy.recalculate();
+        elseif method == "RemoteFunction" and self.ClassName == "RemoteFunction" then
+            if tableFind(remoteSpy.block, self) then
+                return;
+            end;
+            if tableFind(remoteSpy.ignore, self) then
+                return oldNamecall(self, ...);
+            end;
+            local cache = remoteSpy.cache[self];
+            if not cache then
+                cache = {class = self.ClassName};
+                remoteSpy.cache[self] = cache;
+            end;
+            local stringified = {};
+            for i = 1, #arguments do
+                local argument = arguments[i];
+                stringified[i] = utility.valueToString(argument);
+            end;
+            tableInsert(cache, {
+                args = arguments;
+                count = count;
+                called = getcallingscript();
+                stringified = stringified;
             });
             remoteSpy.recalculate();
         end;
@@ -319,3 +390,5 @@ local oldNamecall; oldNamecall = hookmetamethod(game, "__namecall", newcclosure(
 
     return oldNamecall(self, ...);
 end));
+
+rconsoleprint("[BRS] Loaded");
