@@ -25,11 +25,6 @@ local stringSub, stringRep, stringLower, stringGsub, stringFind = string.sub, st
 local taskDefer = task.defer;
 local vector2New = Vector2.new;
 
--- safety vars
-
-local game = cloneref(game);
-local workspace = cloneref(workspace);
-
 -- initialize ui (settings)
 
 local ui = {showNil = false, showStringArguments = false, enableCallLimit = true, callLimit = 100, separateRemotes = false};
@@ -79,14 +74,13 @@ do
         while current ~= game do
             current = current.Parent;
             if current == nil then
-                isParentedToNil = true;
-                break;
-            end;
+				isParentedToNil = true;
+			end;
             tableInsert(path, current);
         end;
         if isParentedToNil then
-            return "--PARENTED TO NIL!";
-        end;
+			return `nil.{target.Name}--[[parented to nil]]`;
+		end;
         local pathString = `game:GetService("{path[#path-1].ClassName}").`;
         for i = -#path+2, -1 do
             local name = path[-i].Name;
@@ -365,7 +359,7 @@ local oldNamecall; oldNamecall = hookmetamethod(game, "__namecall", newcclosure(
         local arguments = {...};
         local count = select("#", ...);
         local method = getnamecallmethod();
-        if method == "FireServer" and self.ClassName == "RemoteEvent" or self.ClassName == "UnreliableRemoteEvent" then
+        if method == "FireServer" or method == "fireServer" and self.ClassName == "RemoteEvent" or self.ClassName == "UnreliableRemoteEvent" then
             if tableFind(remoteSpy.block, self) then
                 return;
             end;
@@ -395,7 +389,7 @@ local oldNamecall; oldNamecall = hookmetamethod(game, "__namecall", newcclosure(
                 });
                 remoteSpy.recalculate();
             end;
-        elseif method == "RemoteFunction" and self.ClassName == "RemoteFunction" then
+        elseif method == "InvokeServer" or method == "invokeServer" and self.ClassName == "RemoteFunction" then
             if tableFind(remoteSpy.block, self) then
                 return;
             end;
